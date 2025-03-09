@@ -25,7 +25,7 @@ pipeline {
         }
         stage('Plan') {
             steps {
-                bat 'terraform plan -out tfplan'
+                bat 'terraform plan -out=tfplan'
                 bat 'terraform show -no-color tfplan > tfplan.txt'
             }
         }
@@ -38,16 +38,14 @@ pipeline {
                             input message: "Do you want to apply the plan?",
                             parameters: [text(name: 'Plan', description: 'Please review the plan', defaultValue: plan)]
                         }
-
-                        bat 'terraform ${action} -input=false tfplan'
+                        bat params.autoApprove ? "terraform apply -input=false --auto-approve tfplan" : "terraform apply -input=false tfplan"
                     } else if (params.action == 'destroy') {
-                        bat 'terraform ${action} --auto-approve'
+                        bat 'terraform destroy --auto-approve'
                     } else {
                         error "Invalid action selected. Please choose either 'apply' or 'destroy'."
                     }
                 }
             }
         }
-
     }
 }
