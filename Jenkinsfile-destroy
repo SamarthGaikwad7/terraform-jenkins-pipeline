@@ -44,11 +44,20 @@ pipeline {
             }
         }
 
+        stage('Check Terraform State') {
+            steps {
+                bat '''
+                    cd /d ci-cd-terraform-jenkins-pipeline
+                    terraform state list
+                '''
+            }
+        }
+
         stage('Terraform Plan for Selected Resources') {
             steps {
                 bat '''
                     cd /d ci-cd-terraform-jenkins-pipeline
-                    terraform plan -destroy -target=aws_instance.public_instance -out=tfplan
+                    terraform plan -destroy -out=tfplan
                 '''
             }
         }
@@ -63,7 +72,7 @@ pipeline {
             steps {
                 bat '''
                     cd /d ci-cd-terraform-jenkins-pipeline
-                    terraform apply tfplan
+                    terraform destroy -auto-approve
                 '''
             }
         }
