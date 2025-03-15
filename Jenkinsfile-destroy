@@ -2,35 +2,25 @@ pipeline {
     agent any
 
     environment {
-        AWS_ACCESS_KEY_ID = credentials('aws-access-key-id')
-        AWS_SECRET_ACCESS_KEY = credentials('aws-secret-access-key')
+        AWS_ACCESS_KEY_ID = credentials('aws-access-key')
+        AWS_SECRET_ACCESS_KEY = credentials('aws-secret-key')
     }
 
     stages {
         stage('Checkout Code') {
             steps {
-                script {
-                    dir("ci-cd-terraform-jenkins-pipeline") {
-                        git branch: 'main', url: 'https://github.com/SamarthGaikwad7/terraform-jenkins-pipeline.git'
-                    }
-                }
+                git branch: 'main', url: 'https://github.com/SamarthGaikwad7/terraform-jenkins-pipeline.git'
             }
         }
 
         stage('Backup Terraform State') {
             steps {
                 script {
-                    def stateFileExists = fileExists('ci-cd-terraform-jenkins-pipeline/terraform.tfstate')
-                    if (stateFileExists) {
-                        echo "Backing up Terraform state..."
-                        bat '''
-                            cd /d ci-cd-terraform-jenkins-pipeline
-                            copy terraform.tfstate terraform.tfstate.backup
-                        '''
+                    if (fileExists('terraform.tfstate')) {
+                        sh 'cp terraform.tfstate terraform.tfstate.backup'
+                        echo "Terraform state backed up."
                     } else {
-                        echo "No Terraform state file found. Nothing to destroy. Exiting."
-                        currentBuild.result = 'SUCCESS'
-                        return
+                        echo "No Terraform state file found. Skipping backup."
                     }
                 }
             }
@@ -38,28 +28,23 @@ pipeline {
 
         stage('Terraform Init & Validate') {
             steps {
-                bat '''
-                    cd /d ci-cd-terraform-jenkins-pipeline
-                    terraform init -reconfigure
-                    terraform validate
-                '''
+                script {
+                    sh 'terraform init -reconfigure'
+                    sh 'terraform validate'
+                }
             }
         }
 
         stage('Check Terraform State') {
             steps {
                 script {
-                    def output = bat(script: '''
-                        cd /d ci-cd-terraform-jenkins-pipeline
-                        terraform state list
-                    ''', returnStdout: true).trim()
-                    
-                    if (output == "") {
-                        echo "No resources found in Terraform state. Nothing to destroy. Exiting pipeline."
-                        currentBuild.result = 'SUCCESS'
-                        return
+                    def stateOutput = sh(script: 'terraform state list', returnStdout: true).trim()
+                    if (stateOutput == '') {
+                        echo "No resources found in Terraform state."
+                        currentBuild.result = 'ABORTED'
+                        error("No resources to destroy. Exiting pipeline.")
                     } else {
-                        echo "Resources found: \n${output}"
+                        echo "Resources detected: ${stateOutput}"
                     }
                 }
             }
@@ -67,27 +52,22 @@ pipeline {
 
         stage('Terraform Refresh') {
             steps {
-                bat '''
-                    cd /d ci-cd-terraform-jenkins-pipeline
-                    terraform refresh
-                '''
+                script {
+                    sh 'terraform refresh'
+                }
             }
         }
 
         stage('Terraform Plan for Destruction') {
             steps {
                 script {
-                    def planOutput = bat(script: '''
-                        cd /d ci-cd-terraform-jenkins-pipeline
-                        terraform plan -destroy -out=tfplan
-                    ''', returnStdout: true).trim()
-                    
-                    echo "Terraform Plan Output:\n${planOutput}"
-                    
-                    if (planOutput.contains("No changes.")) {
+                    def planOutput = sh(script: 'terraform plan -destroy -out=tfplan', returnStdout: true).trim()
+                    if (planOutput.contains("No changes. No objects need to be destroyed.")) {
                         echo "Terraform detected no changes to destroy. Exiting pipeline."
-                        currentBuild.result = 'SUCCESS'
-                        return
+                        currentBuild.result = 'ABORTED'
+                        error("No resources to destroy. Exiting.")
+                    } else {
+                        echo "Terraform Plan Output:\n${planOutput}"
                     }
                 }
             }
@@ -95,26 +75,28 @@ pipeline {
 
         stage('Destroy Confirmation') {
             steps {
-                input message: "Are you sure you want to destroy the selected resources?", ok: "Yes, Destroy"
+                input message: 'Are you sure you want to destroy the selected resources?', ok: 'Yes, Destroy'
             }
         }
 
         stage('Destroy Resources') {
             steps {
-                bat '''
-                    cd /d ci-cd-terraform-jenkins-pipeline
-                    terraform destroy -auto-approve
-                '''
+                script {
+                    sh 'terraform destroy -auto-approve'
+                }
             }
         }
     }
 
     post {
+        always {
+            echo 'Pipeline execution completed.'
+        }
         success {
-            echo "Terraform resources destroyed successfully or no resources needed destruction."
+            echo 'Terraform resources destroyed successfully!'
         }
         failure {
-            echo "Terraform destruction failed! Check logs for errors."
+            echo 'Terraform destroy failed. Please check logs.'
         }
     }
 }
