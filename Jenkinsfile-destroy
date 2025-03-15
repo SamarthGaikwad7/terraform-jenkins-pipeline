@@ -1,6 +1,11 @@
 pipeline {
     agent any
 
+    environment {
+        AWS_ACCESS_KEY_ID = credentials('aws-access-key-id')
+        AWS_SECRET_ACCESS_KEY = credentials('aws-secret-access-key')
+    }
+
     stages {
         stage('Checkout') {
             steps {
@@ -14,23 +19,37 @@ pipeline {
 
         stage('Backup Terraform State') {
             steps {
-                withCredentials([
-                    string(credentialsId: 'aws-access-key-id', variable: 'AWS_ACCESS_KEY_ID'),
-                    string(credentialsId: 'aws-secret-access-key', variable: 'AWS_SECRET_ACCESS_KEY')
-                ]) {
-                    script {
-                        def stateFileExists = fileExists('ci-cd-terraform-jenkins-pipeline/terraform.lfstate')
-                        if (stateFileExists) {
-                            bat '''
-                                cd /d ci-cd-terraform-jenkins-pipeline
-                                echo "Backing up Terraform state..."
-                                copy terraform.tfstate terraform.tfstate.backup
-                            '''
-                        } else {
-                            echo "No Terraform state file found. Skipping backup."
-                        }
+                script {
+                    def stateFileExists = fileExists('ci-cd-terraform-jenkins-pipeline/terraform.tfstate')
+                    if (stateFileExists) {
+                        echo "Backing up Terraform state..."
+                        bat '''
+                            cd /d ci-cd-terraform-jenkins-pipeline
+                            copy terraform.tfstate terraform.tfstate.backup
+                        '''
+                    } else {
+                        echo "No Terraform state file found. Skipping backup."
                     }
                 }
+            }
+        }
+
+        stage('Terraform Init & Validate') {
+            steps {
+                bat '''
+                    cd /d ci-cd-terraform-jenkins-pipeline
+                    terraform init -reconfigure
+                    terraform validate
+                '''
+            }
+        }
+
+        stage('Terraform Plan for Selected Resources') {
+            steps {
+                bat '''
+                    cd /d ci-cd-terraform-jenkins-pipeline
+                    terraform plan -destroy -target=aws_instance.public_instance -out=tfplan
+                '''
             }
         }
 
@@ -40,46 +59,12 @@ pipeline {
             }
         }
 
-        stage('Terraform Init & Validate') {
-            steps {
-                withCredentials([
-                    string(credentialsId: 'aws-access-key-id', variable: 'AWS_ACCESS_KEY_ID'),
-                    string(credentialsId: 'aws-secret-access-key', variable: 'AWS_SECRET_ACCESS_KEY')
-                ]) {
-                    bat '''
-                        cd /d ci-cd-terraform-jenkins-pipeline
-                        terraform init -reconfigure
-                        terraform validate
-                    '''
-                }
-            }
-        }
-
-        stage('Terraform Plan for Selected Resources') {
-            steps {
-                withCredentials([
-                    string(credentialsId: 'aws-access-key-id', variable: 'AWS_ACCESS_KEY_ID'),
-                    string(credentialsId: 'aws-secret-access-key', variable: 'AWS_SECRET_ACCESS_KEY')
-                ]) {
-                    bat '''
-                        cd /d ci-cd-terraform-jenkins-pipeline
-                        terraform plan -destroy -target=aws_instance.public_instance -out=tfplan
-                    '''
-                }
-            }
-        }
-
         stage('Destroy Selected Resources') {
             steps {
-                withCredentials([
-                    string(credentialsId: 'aws-access-key-id', variable: 'AWS_ACCESS_KEY_ID'),
-                    string(credentialsId: 'aws-secret-access-key', variable: 'AWS_SECRET_ACCESS_KEY')
-                ]) {
-                    bat '''
-                        cd /d ci-cd-terraform-jenkins-pipeline
-                        terraform destroy -target=aws_instance.public_instance -auto-approve
-                    '''
-                }
+                bat '''
+                    cd /d ci-cd-terraform-jenkins-pipeline
+                    terraform apply tfplan
+                '''
             }
         }
     }
