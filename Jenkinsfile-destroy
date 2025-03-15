@@ -89,7 +89,7 @@ pipeline {
             steps {
                 bat '''
                     cd /d ci-cd-terraform-jenkins-pipeline
-                    terraform apply -auto-approve tfplan
+                    terraform destroy -auto-approve
                 '''
             }
         }
