@@ -19,7 +19,7 @@ pipeline {
                     string(credentialsId: 'aws-secret-access-key', variable: 'AWS_SECRET_ACCESS_KEY')
                 ]) {
                     script {
-                        def stateFileExists = fileExists('ci-cd-terraform-jenkins-pipeline/terraform.tfstate')
+                        def stateFileExists = fileExists('ci-cd-terraform-jenkins-pipeline/terraform.lfstate')
                         if (stateFileExists) {
                             bat '''
                                 cd /d ci-cd-terraform-jenkins-pipeline
