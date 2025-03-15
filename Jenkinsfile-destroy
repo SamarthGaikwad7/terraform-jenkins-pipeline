@@ -1,0 +1,86 @@
+pipeline {
+    agent any
+
+    stages {
+        stage('Checkout') {
+            steps {
+                script {
+                    dir("ci-cd-terraform-jenkins-pipeline") {
+                        git branch: 'main', url: 'https://github.com/SamarthGaikwad7/terraform-jenkins-pipeline.git'
+                    }
+                }
+            }
+        }
+
+        stage('Backup Terraform State') {
+            steps {
+                withCredentials([
+                    string(credentialsId: 'aws-access-key-id', variable: 'AWS_ACCESS_KEY_ID'),
+                    string(credentialsId: 'aws-secret-access-key', variable: 'AWS_SECRET_ACCESS_KEY')
+                ]) {
+                    script {
+                        def stateFileExists = fileExists('ci-cd-terraform-jenkins-pipeline/terraform.tfstate')
+                        if (stateFileExists) {
+                            bat '''
+                                cd /d ci-cd-terraform-jenkins-pipeline
+                                echo "Backing up Terraform state..."
+                                copy terraform.tfstate terraform.tfstate.backup
+                            '''
+                        } else {
+                            echo "No Terraform state file found. Skipping backup."
+                        }
+                    }
+                }
+            }
+        }
+
+        stage('Destroy Confirmation') {
+            steps {
+                input message: "Are you sure you want to destroy the infrastructure?", ok: "Yes, Destroy"
+            }
+        }
+
+        stage('Terraform Init & Validate') {
+            steps {
+                withCredentials([
+                    string(credentialsId: 'aws-access-key-id', variable: 'AWS_ACCESS_KEY_ID'),
+                    string(credentialsId: 'aws-secret-access-key', variable: 'AWS_SECRET_ACCESS_KEY')
+                ]) {
+                    bat '''
+                        cd /d ci-cd-terraform-jenkins-pipeline
+                        terraform init -reconfigure
+                        terraform validate
+                    '''
+                }
+            }
+        }
+
+        stage('Terraform Plan') {
+            steps {
+                withCredentials([
+                    string(credentialsId: 'aws-access-key-id', variable: 'AWS_ACCESS_KEY_ID'),
+                    string(credentialsId: 'aws-secret-access-key', variable: 'AWS_SECRET_ACCESS_KEY')
+                ]) {
+                    bat '''
+                        cd /d ci-cd-terraform-jenkins-pipeline
+                        terraform plan -destroy -out=tfplan
+                    '''
+                }
+            }
+        }
+
+        stage('Destroy') {
+            steps {
+                withCredentials([
+                    string(credentialsId: 'aws-access-key-id', variable: 'AWS_ACCESS_KEY_ID'),
+                    string(credentialsId: 'aws-secret-access-key', variable: 'AWS_SECRET_ACCESS_KEY')
+                ]) {
+                    bat '''
+                        cd /d ci-cd-terraform-jenkins-pipeline
+                        terraform destroy -auto-approve
+                    '''
+                }
+            }
+        }
+    }
+}
