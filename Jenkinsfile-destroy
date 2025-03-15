@@ -1,11 +1,6 @@
 pipeline {
     agent any
 
-    environment {
-        AWS_ACCESS_KEY_ID = credentials('aws-access-key')
-        AWS_SECRET_ACCESS_KEY = credentials('aws-secret-key')
-    }
-
     stages {
         stage('Checkout Code') {
             steps {
@@ -28,9 +23,14 @@ pipeline {
 
         stage('Terraform Init & Validate') {
             steps {
-                script {
-                    sh 'terraform init -reconfigure'
-                    sh 'terraform validate'
+                withCredentials([
+                    string(credentialsId: 'aws-access-key-id', variable: 'AWS_ACCESS_KEY_ID'),
+                    string(credentialsId: 'aws-secret-access-key', variable: 'AWS_SECRET_ACCESS_KEY')
+                ]) {
+                    script {
+                        sh 'terraform init -reconfigure'
+                        sh 'terraform validate'
+                    }
                 }
             }
         }
@@ -38,11 +38,11 @@ pipeline {
         stage('Check Terraform State') {
             steps {
                 script {
-                    def stateOutput = sh(script: 'terraform state list', returnStdout: true).trim()
+                    def stateOutput = sh(script: 'terraform state list || true', returnStdout: true).trim()
                     if (stateOutput == '') {
-                        echo "No resources found in Terraform state."
+                        echo "No resources found in Terraform state. Exiting pipeline."
                         currentBuild.result = 'ABORTED'
-                        error("No resources to destroy. Exiting pipeline.")
+                        error("No resources to destroy.")
                     } else {
                         echo "Resources detected: ${stateOutput}"
                     }
@@ -52,22 +52,32 @@ pipeline {
 
         stage('Terraform Refresh') {
             steps {
-                script {
-                    sh 'terraform refresh'
+                withCredentials([
+                    string(credentialsId: 'aws-access-key-id', variable: 'AWS_ACCESS_KEY_ID'),
+                    string(credentialsId: 'aws-secret-access-key', variable: 'AWS_SECRET_ACCESS_KEY')
+                ]) {
+                    script {
+                        sh 'terraform apply -refresh-only -auto-approve'
+                    }
                 }
             }
         }
 
         stage('Terraform Plan for Destruction') {
             steps {
-                script {
-                    def planOutput = sh(script: 'terraform plan -destroy -out=tfplan', returnStdout: true).trim()
-                    if (planOutput.contains("No changes. No objects need to be destroyed.")) {
-                        echo "Terraform detected no changes to destroy. Exiting pipeline."
-                        currentBuild.result = 'ABORTED'
-                        error("No resources to destroy. Exiting.")
-                    } else {
-                        echo "Terraform Plan Output:\n${planOutput}"
+                withCredentials([
+                    string(credentialsId: 'aws-access-key-id', variable: 'AWS_ACCESS_KEY_ID'),
+                    string(credentialsId: 'aws-secret-access-key', variable: 'AWS_SECRET_ACCESS_KEY')
+                ]) {
+                    script {
+                        def planOutput = sh(script: 'terraform plan -destroy -out=tfplan', returnStdout: true).trim()
+                        if (planOutput.contains("No changes. No objects need to be destroyed.")) {
+                            echo "Terraform detected no changes to destroy. Exiting pipeline."
+                            currentBuild.result = 'ABORTED'
+                            error("No resources to destroy.")
+                        } else {
+                            echo "Terraform Plan Output:\n${planOutput}"
+                        }
                     }
                 }
             }
@@ -81,8 +91,13 @@ pipeline {
 
         stage('Destroy Resources') {
             steps {
-                script {
-                    sh 'terraform destroy -auto-approve'
+                withCredentials([
+                    string(credentialsId: 'aws-access-key-id', variable: 'AWS_ACCESS_KEY_ID'),
+                    string(credentialsId: 'aws-secret-access-key', variable: 'AWS_SECRET_ACCESS_KEY')
+                ]) {
+                    script {
+                        sh 'terraform destroy -auto-approve'
+                    }
                 }
             }
         }
