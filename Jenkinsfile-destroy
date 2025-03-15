@@ -28,7 +28,9 @@ pipeline {
                             copy terraform.tfstate terraform.tfstate.backup
                         '''
                     } else {
-                        echo "No Terraform state file found. Skipping backup."
+                        echo "No Terraform state file found. Nothing to destroy. Exiting."
+                        currentBuild.result = 'SUCCESS'
+                        return
                     }
                 }
             }
@@ -53,7 +55,9 @@ pipeline {
                     ''', returnStdout: true).trim()
                     
                     if (output == "") {
-                        error "No resources found in Terraform state. Nothing to destroy."
+                        echo "No resources found in Terraform state. Nothing to destroy. Exiting pipeline."
+                        currentBuild.result = 'SUCCESS'
+                        return
                     } else {
                         echo "Resources found: \n${output}"
                     }
@@ -81,7 +85,9 @@ pipeline {
                     echo "Terraform Plan Output:\n${planOutput}"
                     
                     if (planOutput.contains("No changes.")) {
-                        error "Terraform detected no changes to destroy. Exiting pipeline."
+                        echo "Terraform detected no changes to destroy. Exiting pipeline."
+                        currentBuild.result = 'SUCCESS'
+                        return
                     }
                 }
             }
@@ -105,7 +111,7 @@ pipeline {
 
     post {
         success {
-            echo "Terraform resources destroyed successfully."
+            echo "Terraform resources destroyed successfully or no resources needed destruction."
         }
         failure {
             echo "Terraform destruction failed! Check logs for errors."
