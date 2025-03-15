@@ -36,19 +36,19 @@ pipeline {
         }
 
         stage('Check Terraform State') {
-            steps {
-                script {
-                    def stateOutput = bat(script: 'terraform state list > state.log', returnStdout: true).trim()
-                    if (stateOutput == '') {
-                        echo "No resources found in Terraform state."
-                        error("No resources to destroy. Exiting pipeline.")
-                    } else {
-                        echo "Resources detected:\n${stateOutput}"
-                    }
-                }
+    steps {
+        script {
+            def stateOutput = bat(script: 'terraform state list', returnStdout: true).trim()
+            if (stateOutput == '') {
+                echo "No resources found in Terraform state. Possibly already deleted or missing state file."
+                currentBuild.result = 'ABORTED'
+                error("No resources to destroy. Exiting pipeline.")
+            } else {
+                echo "Resources detected:\n${stateOutput}"
             }
         }
-
+    }
+}
         stage('Terraform Refresh (Check for Drifts)') {
             steps {
                 script {
