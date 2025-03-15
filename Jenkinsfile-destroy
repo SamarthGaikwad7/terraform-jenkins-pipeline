@@ -46,14 +46,31 @@ pipeline {
 
         stage('Check Terraform State') {
             steps {
+                script {
+                    def output = bat(script: '''
+                        cd /d ci-cd-terraform-jenkins-pipeline
+                        terraform state list
+                    ''', returnStdout: true).trim()
+                    
+                    if (output == "") {
+                        error "No resources found in Terraform state. Nothing to destroy."
+                    } else {
+                        echo "Resources found: \n${output}"
+                    }
+                }
+            }
+        }
+
+        stage('Terraform Refresh') {
+            steps {
                 bat '''
                     cd /d ci-cd-terraform-jenkins-pipeline
-                    terraform state list
+                    terraform refresh
                 '''
             }
         }
 
-        stage('Terraform Plan for Selected Resources') {
+        stage('Terraform Plan for Destruction') {
             steps {
                 bat '''
                     cd /d ci-cd-terraform-jenkins-pipeline
@@ -72,7 +89,7 @@ pipeline {
             steps {
                 bat '''
                     cd /d ci-cd-terraform-jenkins-pipeline
-                    terraform destroy -auto-approve
+                    terraform apply -auto-approve tfplan
                 '''
             }
         }
