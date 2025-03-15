@@ -63,7 +63,7 @@ pipeline {
                 ]) {
                     bat '''
                         cd /d ci-cd-terraform-jenkins-pipeline
-                        terraform plan -destroy -target=aws_instance.my_ec2 -target=aws_s3_bucket.my_bucket -out=tfplan
+                        terraform plan -destroy -target=aws_instance.public_instance -out=tfplan
                     '''
                 }
             }
@@ -77,7 +77,7 @@ pipeline {
                 ]) {
                     bat '''
                         cd /d ci-cd-terraform-jenkins-pipeline
-                        terraform destroy -target=aws_instance.my_ec2 -target=aws_s3_bucket.my_bucket -auto-approve
+                        terraform destroy -target=aws_instance.public_instance -auto-approve
                     '''
                 }
             }
