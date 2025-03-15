@@ -7,7 +7,7 @@ pipeline {
     }
 
     stages {
-        stage('Checkout') {
+        stage('Checkout Code') {
             steps {
                 script {
                     dir("ci-cd-terraform-jenkins-pipeline") {
@@ -72,10 +72,18 @@ pipeline {
 
         stage('Terraform Plan for Destruction') {
             steps {
-                bat '''
-                    cd /d ci-cd-terraform-jenkins-pipeline
-                    terraform plan -destroy -out=tfplan
-                '''
+                script {
+                    def planOutput = bat(script: '''
+                        cd /d ci-cd-terraform-jenkins-pipeline
+                        terraform plan -destroy -out=tfplan
+                    ''', returnStdout: true).trim()
+                    
+                    echo "Terraform Plan Output:\n${planOutput}"
+                    
+                    if (planOutput.contains("No changes.")) {
+                        error "Terraform detected no changes to destroy. Exiting pipeline."
+                    }
+                }
             }
         }
 
@@ -85,13 +93,22 @@ pipeline {
             }
         }
 
-        stage('Destroy Selected Resources') {
+        stage('Destroy Resources') {
             steps {
                 bat '''
                     cd /d ci-cd-terraform-jenkins-pipeline
                     terraform destroy -auto-approve
                 '''
             }
+        }
+    }
+
+    post {
+        success {
+            echo "Terraform resources destroyed successfully."
+        }
+        failure {
+            echo "Terraform destruction failed! Check logs for errors."
         }
     }
 }
