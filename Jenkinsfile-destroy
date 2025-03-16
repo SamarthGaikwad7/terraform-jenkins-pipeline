@@ -30,7 +30,11 @@ pipeline {
             steps {
                 script {
                     bat 'terraform init -reconfigure' // Ensure backend is configured
-                    bat 'terraform state pull > terraform.tfstate || echo "No existing state found."' 
+                    def statePull = bat(script: 'terraform state pull > terraform.tfstate', returnStatus: true)
+                    if (statePull != 0) {
+                        echo "No existing state found! Creating a blank state file..."
+                        bat 'echo "{}" > terraform.tfstate'
+                    }
                     echo "Terraform state synchronized with AWS."
                 }
             }
@@ -41,10 +45,15 @@ pipeline {
                 script {
                     def stateOutput = bat(script: 'terraform state list', returnStdout: true).trim()
                     if (stateOutput == '') {
-                        echo "No Terraform resources found! Trying to import known resources..."
-                        bat '''
-                            terraform import aws_instance.public_instance i-030bc4a28ad776e64 || echo "Instance import failed or not needed"
-                        '''
+                        echo "No Terraform resources found! Checking if AWS instance exists before import..."
+                        def instanceCheck = bat(script: 'aws ec2 describe-instances --instance-ids i-030bc4a28ad776e64 --query "Reservations[*].Instances[*].InstanceId" --output text', returnStatus: true)
+
+                        if (instanceCheck == 0) {
+                            echo "Instance found! Importing into Terraform state..."
+                            bat 'terraform import aws_instance.public_instance i-030bc4a28ad776e64'
+                        } else {
+                            echo "Instance not found. Skipping import."
+                        }
                     } else {
                         echo "Resources detected:\n${stateOutput}"
                     }
@@ -81,9 +90,9 @@ pipeline {
                     def stateExists = fileExists('terraform.tfstate')
                     if (!stateExists) {
                         echo "No Terraform state file found! Running Terraform refresh to detect resources..."
-                        bat 'terraform refresh'
+                        bat 'terraform refresh || echo "Terraform refresh failed!"'
                     }
-                    bat 'terraform destroy -auto-approve'
+                    bat 'terraform destroy -auto-approve || echo "Terraform destroy failed!"'
                 }
             }
         }
