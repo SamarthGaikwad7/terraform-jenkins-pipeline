@@ -30,9 +30,10 @@ pipeline {
             steps {
                 script {
                     bat 'terraform init -reconfigure' // Ensure backend is configured
-                    def statePull = bat(script: 'terraform state pull > terraform.tfstate', returnStatus: true)
-                    if (statePull != 0) {
-                        echo "No existing state found! Creating a blank state file..."
+                    def statePullStatus = bat(script: 'terraform state pull > terraform.tfstate', returnStatus: true)
+
+                    if (statePullStatus != 0 || !fileExists('terraform.tfstate')) {
+                        echo "No existing state found or state file is empty! Creating a blank state file..."
                         bat 'echo "{}" > terraform.tfstate'
                     }
                     echo "Terraform state synchronized with AWS."
@@ -44,18 +45,20 @@ pipeline {
             steps {
                 script {
                     def stateOutput = bat(script: 'terraform state list', returnStdout: true).trim()
+
                     if (stateOutput == '') {
-                        echo "No Terraform resources found! Checking if AWS instance exists before import..."
+                        echo "No Terraform resources found! Checking AWS instance before importing..."
+
                         def instanceCheck = bat(script: 'aws ec2 describe-instances --instance-ids i-030bc4a28ad776e64 --query "Reservations[*].Instances[*].InstanceId" --output text', returnStatus: true)
 
                         if (instanceCheck == 0) {
                             echo "Instance found! Importing into Terraform state..."
                             bat 'terraform import aws_instance.public_instance i-030bc4a28ad776e64'
                         } else {
-                            echo "Instance not found. Skipping import."
+                            echo "Instance not found in AWS. Skipping import."
                         }
                     } else {
-                        echo "Resources detected:\n${stateOutput}"
+                        echo "Terraform resources detected:\n${stateOutput}"
                     }
                 }
             }
