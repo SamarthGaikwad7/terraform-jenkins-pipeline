@@ -43,9 +43,7 @@ pipeline {
                     if (stateOutput == '') {
                         echo "No Terraform resources found! Trying to import known resources..."
                         bat '''
-                            terraform import aws_instance.my_instance i-xxxxxxxxxxxxxxxxx || echo "Instance import failed or not needed"
-                            terraform import aws_s3_bucket.my_bucket my-bucket-name || echo "S3 bucket import failed or not needed"
-                            terraform import aws_vpc.my_vpc vpc-xxxxxxxx || echo "VPC import failed or not needed"
+                            terraform import aws_instance.my_instance i-030bc4a28ad776e64 || echo "Instance import failed or not needed"
                         '''
                     } else {
                         echo "Resources detected:\n${stateOutput}"
