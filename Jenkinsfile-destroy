@@ -42,7 +42,7 @@ pipeline {
                     if (stateOutput == '') {
                         echo "No resources found in Terraform state. Importing missing resources..."
                         bat '''
-                            terraform import aws_instance.my_instance i-0c5089ac31cef0619 || echo "Instance import failed or not needed"
+                            terraform import aws_instance.public_instance i-0c5089ac31cef0619 || echo "Instance import failed or not needed"
                             terraform import aws_s3_bucket.my_bucket my-bucket-name || echo "S3 bucket import failed or not needed"
                             terraform import aws_vpc.my_vpc vpc-xxxxxxxx || echo "VPC import failed or not needed"
                         '''
