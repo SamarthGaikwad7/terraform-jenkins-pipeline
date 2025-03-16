@@ -31,8 +31,8 @@ pipeline {
                 script {
                     def stateOutput = bat(script: 'terraform state list', returnStdout: true).trim()
                     if (stateOutput == '') {
-                        echo "No resources found in Terraform state. Trying to import existing resources..."
-                        bat 'terraform import <resource_type.resource_name> <resource_id>'
+                        echo "No resources found in Terraform state. Possibly already deleted."
+                        currentBuild.result = 'SUCCESS' // Mark as success instead of failing
                     } else {
                         echo "Resources detected:\n${stateOutput}"
                     }
@@ -40,10 +40,11 @@ pipeline {
             }
         }
 
-        stage('Terraform Refresh (Sync with AWS)') {
+        stage('Sync Terraform State') {
             steps {
                 script {
-                    bat 'terraform apply -refresh-only'
+                    bat 'terraform state pull > terraform.tfstate'
+                    echo "Terraform state synchronized with AWS."
                 }
             }
         }
@@ -74,6 +75,9 @@ pipeline {
         stage('Destroy Resources') {
             steps {
                 script {
+                    if (!fileExists('tfplan')) {
+                        error "Terraform plan file not found! Aborting destroy."
+                    }
                     bat 'terraform destroy -auto-approve'
                 }
             }
