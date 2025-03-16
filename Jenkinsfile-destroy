@@ -1,15 +1,13 @@
 pipeline {
     agent any
-
     environment {
-        AWS_ACCESS_KEY_ID = credentials('aws-access-key-id')
-        AWS_SECRET_ACCESS_KEY = credentials('aws-secret-access-key')
+        AWS_ACCESS_KEY_ID = credentials('AWS_ACCESS_KEY_ID')
+        AWS_SECRET_ACCESS_KEY = credentials('AWS_SECRET_ACCESS_KEY')
     }
-
     stages {
         stage('Checkout Code') {
             steps {
-                git branch: 'main', url: 'https://github.com/SamarthGaikwad7/terraform-jenkins-pipeline.git'
+                git 'https://github.com/SamarthGaikwad7/terraform-jenkins-pipeline.git'
             }
         }
 
@@ -20,7 +18,7 @@ pipeline {
                         bat 'copy terraform.tfstate terraform.tfstate.backup'
                         echo "Terraform state backed up."
                     } else {
-                        echo "No Terraform state file found. Skipping backup."
+                        echo "No existing state file found. Proceeding..."
                     }
                 }
             }
@@ -29,14 +27,13 @@ pipeline {
         stage('Sync Terraform State') {
             steps {
                 script {
-                    bat 'terraform init -reconfigure' // Ensure backend is configured
-                    def statePullStatus = bat(script: 'terraform state pull > terraform.tfstate', returnStatus: true)
-
-                    if (statePullStatus != 0 || !fileExists('terraform.tfstate')) {
-                        echo "No existing state found or state file is empty! Creating a blank state file..."
-                        bat 'echo "{}" > terraform.tfstate'
+                    bat 'terraform init -reconfigure'
+                    def stateExists = bat(returnStatus: true, script: 'terraform state pull > terraform.tfstate') == 0
+                    if (stateExists) {
+                        echo "Terraform state synchronized successfully."
+                    } else {
+                        echo "Warning: No state file found. Infrastructure may not exist!"
                     }
-                    echo "Terraform state synchronized with AWS."
                 }
             }
         }
@@ -44,21 +41,10 @@ pipeline {
         stage('Check & Import Missing Resources') {
             steps {
                 script {
-                    def stateOutput = bat(script: 'terraform state list', returnStdout: true).trim()
-
-                    if (stateOutput == '') {
-                        echo "No Terraform resources found! Checking AWS instance before importing..."
-
-                        def instanceCheck = bat(script: 'aws ec2 describe-instances --instance-ids i-030bc4a28ad776e64 --query "Reservations[*].Instances[*].InstanceId" --output text', returnStatus: true)
-
-                        if (instanceCheck == 0) {
-                            echo "Instance found! Importing into Terraform state..."
-                            bat 'terraform import aws_instance.public_instance i-030bc4a28ad776e64'
-                        } else {
-                            echo "Instance not found in AWS. Skipping import."
-                        }
-                    } else {
-                        echo "Terraform resources detected:\n${stateOutput}"
+                    def stateCheck = bat(returnStatus: true, script: 'terraform state list')
+                    if (stateCheck != 0) {
+                        echo "No state file found! Checking for manual resource import..."
+                        // Add manual import steps here if needed
                     }
                 }
             }
@@ -67,7 +53,6 @@ pipeline {
         stage('Terraform Init & Validate') {
             steps {
                 script {
-                    bat 'terraform init -reconfigure'
                     bat 'terraform validate'
                 }
             }
@@ -76,26 +61,29 @@ pipeline {
         stage('Terraform Plan for Destruction') {
             steps {
                 script {
-                    bat 'terraform plan -destroy -out=tfplan'
+                    def planStatus = bat(returnStatus: true, script: 'terraform plan -destroy -out=tfplan')
+                    if (planStatus != 0) {
+                        error "Terraform destroy plan failed. Check configuration."
+                    }
                 }
             }
         }
 
         stage('Destroy Confirmation') {
             steps {
-                input message: 'Are you sure you want to destroy the selected resources?', ok: 'Yes, Destroy'
+                script {
+                    input message: "Proceed with destruction?", ok: "Yes, Destroy"
+                }
             }
         }
 
         stage('Destroy Resources') {
             steps {
                 script {
-                    def stateExists = fileExists('terraform.tfstate')
-                    if (!stateExists) {
-                        echo "No Terraform state file found! Running Terraform refresh to detect resources..."
-                        bat 'terraform refresh || echo "Terraform refresh failed!"'
+                    def destroyStatus = bat(returnStatus: true, script: 'terraform destroy -auto-approve')
+                    if (destroyStatus != 0) {
+                        error "Terraform destroy failed! Check logs."
                     }
-                    bat 'terraform destroy -auto-approve || echo "Terraform destroy failed!"'
                 }
             }
         }
@@ -103,13 +91,10 @@ pipeline {
 
     post {
         always {
-            echo 'Pipeline execution completed.'
-        }
-        success {
-            echo 'Terraform resources destroyed successfully!'
+            echo "Pipeline execution completed."
         }
         failure {
-            echo 'Terraform destroy failed. Please check logs.'
+            echo "Terraform destroy failed. Please check logs."
         }
     }
 }
