@@ -26,20 +26,6 @@ pipeline {
             }
         }
 
-        stage('Check Terraform State') {
-            steps {
-                script {
-                    def stateOutput = bat(script: 'terraform state list', returnStdout: true).trim()
-                    if (stateOutput == '') {
-                        echo "No resources found in Terraform state. Possibly already deleted."
-                        currentBuild.result = 'SUCCESS' // Mark as success instead of failing
-                    } else {
-                        echo "Resources detected:\n${stateOutput}"
-                    }
-                }
-            }
-        }
-
         stage('Sync Terraform State') {
             steps {
                 script {
@@ -49,20 +35,34 @@ pipeline {
             }
         }
 
-        stage('Terraform Init & Validate') {
+        stage('Check & Import Missing Resources') {
             steps {
                 script {
-                    bat 'terraform init -reconfigure'
-                    bat 'terraform validate'
+                    def stateOutput = bat(script: 'terraform state list', returnStdout: true).trim()
+                    if (stateOutput == '') {
+                        echo "No resources found in Terraform state. Importing missing resources..."
+                        bat '''
+                            terraform import aws_instance.my_instance i-0c5089ac31cef0619 || echo "Instance import failed or not needed"
+                            terraform import aws_s3_bucket.my_bucket my-bucket-name || echo "S3 bucket import failed or not needed"
+                            terraform import aws_vpc.my_vpc vpc-xxxxxxxx || echo "VPC import failed or not needed"
+                        '''
+                    } else {
+                        echo "Terraform state contains resources. Proceeding with destroy..."
+                    }
                 }
+            }
+        }
+
+        stage('Terraform Init & Validate') {
+            steps {
+                bat 'terraform init -reconfigure'
+                bat 'terraform validate'
             }
         }
 
         stage('Terraform Plan for Destruction') {
             steps {
-                script {
-                    bat 'terraform plan -destroy -out=tfplan'
-                }
+                bat 'terraform plan -destroy -out=tfplan'
             }
         }
 
@@ -75,9 +75,6 @@ pipeline {
         stage('Destroy Resources') {
             steps {
                 script {
-                    if (!fileExists('tfplan')) {
-                        error "Terraform plan file not found! Aborting destroy."
-                    }
                     bat 'terraform destroy -auto-approve'
                 }
             }
