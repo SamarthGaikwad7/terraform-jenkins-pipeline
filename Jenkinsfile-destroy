@@ -31,9 +31,8 @@ pipeline {
                 script {
                     def stateOutput = bat(script: 'terraform state list', returnStdout: true).trim()
                     if (stateOutput == '') {
-                        echo "No resources found in Terraform state. Possibly already deleted."
-                        currentBuild.result = 'ABORTED'
-                        error("No resources to destroy. Exiting pipeline.")
+                        echo "No resources found in Terraform state. Trying to import existing resources..."
+                        bat 'terraform import <resource_type.resource_name> <resource_id>'
                     } else {
                         echo "Resources detected:\n${stateOutput}"
                     }
@@ -44,22 +43,7 @@ pipeline {
         stage('Terraform Refresh (Sync with AWS)') {
             steps {
                 script {
-                    bat 'terraform refresh'
-                }
-            }
-        }
-
-        stage('Force Reset Terraform State') {
-            steps {
-                script {
-                    if (fileExists('terraform.tfstate')) {
-                        bat 'del /F terraform.tfstate'
-                        echo "Deleted existing Terraform state file."
-                    }
-                    if (fileExists('terraform.tfstate.backup')) {
-                        bat 'del /F terraform.tfstate.backup'
-                        echo "Deleted Terraform state backup file."
-                    }
+                    bat 'terraform apply -refresh-only'
                 }
             }
         }
