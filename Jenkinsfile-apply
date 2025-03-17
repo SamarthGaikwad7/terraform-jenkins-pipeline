@@ -2,17 +2,17 @@ pipeline {
     agent any
 
     environment {
-        AWS_ACCESS_KEY_ID = credentials('aws-access-key-id') // Replace with your Jenkins credential ID
-        AWS_SECRET_ACCESS_KEY = credentials('aws-secret-access-key') // Replace with your Jenkins credential ID
-        SES_SENDER = 'samarthg633@gmail.com'  // Must be a verified email in AWS SES
+        AWS_ACCESS_KEY_ID = credentials('aws-access-key-id') 
+        AWS_SECRET_ACCESS_KEY = credentials('aws-secret-access-key') 
+        SES_SENDER = 'samarthg633@gmail.com'  
         SES_RECIPIENT = 'samarthg633@gmail.com'
-        SMTP_SERVER = 'email-smtp.us-east-1.amazonaws.com'  // Change based on AWS region
+        SMTP_SERVER = 'email-smtp.us-east-1.amazonaws.com'  
     }
 
     stages {
         stage('Checkout Code') {
             steps {
-                git branch: 'main', url: 'https://github.com/SamarthGaikwad7/terraform-jenkins-pipeline.git' // Replace with your repo URL
+                git branch: 'main', url: 'https://github.com/SamarthGaikwad7/terraform-jenkins-pipeline.git'
             }
         }
 
@@ -37,7 +37,10 @@ pipeline {
         stage('Terraform Apply') {
             steps {
                 input message: 'Do you want to apply the Terraform changes?'
-                bat 'terraform apply -auto-approve tfplan'
+                bat '''
+                    terraform plan -out=tfplan
+                    terraform apply -auto-approve tfplan
+                '''
             }
         }
     }
@@ -56,9 +59,9 @@ pipeline {
                     <b>Status:</b> <span style="color:green;"><b>SUCCESS ✅</b></span><br><br>
                     Regards,<br>
                     Jenkins""",
-                    to: "${env.SES_RECIPIENT}",
-                    replyTo: "${env.SES_SENDER}",
-                    from: "${env.SES_SENDER}",
+                    to: "samarthg633@gmail.com",
+                    replyTo: "samarthg633@gmail.com",
+                    from: "samarthg633@gmail.com",
                     mimeType: 'text/html'
                 )
             }
@@ -77,9 +80,9 @@ pipeline {
                     Please check the logs for more details.<br><br>
                     Regards,<br>
                     Jenkins""",
-                    to: "${env.SES_RECIPIENT}",
-                    replyTo: "${env.SES_SENDER}",
-                    from: "${env.SES_SENDER}",
+                    to: "samarthg633@gmail.com",
+                    replyTo: "samarthg633@gmail.com",
+                    from: "samarthg633@gmail.com",
                     mimeType: 'text/html'
                 )
             }
