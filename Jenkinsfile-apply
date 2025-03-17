@@ -12,7 +12,7 @@ pipeline {
     stages {
         stage('Checkout Code') {
             steps {
-                git branch: 'main', url: 'https://github.com/suraj00888/sogo.git' // Replace with your repo URL
+                git branch: 'main', url: 'https://github.com/SamarthGaikwad7/terraform-jenkins-pipeline.git' // Replace with your repo URL
             }
         }
 
