@@ -43,10 +43,22 @@ pipeline {
         stage('Check & Import Missing Resources') {
             steps {
                 script {
+                    // Check if resources exist in the state
                     def stateCheck = bat(returnStatus: true, script: 'terraform state list')
                     if (stateCheck != 0) {
                         echo "No state file found! Checking for manual resource import..."
-                        // Add manual import steps here if needed
+
+                        // Example: Import an EC2 instance
+                        def resourceId = "i-1234567890abcdef0" // Replace with the actual resource ID
+                        def resourceAddress = "aws_instance.my_instance" // Replace with the Terraform resource address
+
+                        // Import the resource into Terraform state
+                        def importStatus = bat(returnStatus: true, script: "terraform import ${resourceAddress} ${resourceId}")
+                        if (importStatus == 0) {
+                            echo "Resource imported successfully."
+                        } else {
+                            echo "Failed to import resource. Check logs."
+                        }
                     }
                 }
             }
