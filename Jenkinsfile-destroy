@@ -40,11 +40,32 @@ pipeline {
             }
         }
 
+        stage('Query AWS Resources by Name') {
+            steps {
+                script {
+                    // Example: Query EC2 instance by name
+                    def instanceName = "My EC2 Instance XYZ 2025" // Replace with the name of your EC2 instance
+                    def instanceId = bat(returnStdout: true, script: """
+                        aws ec2 describe-instances \
+                            --filters "Name=tag:Name,Values=${instanceName}" \
+                            --query "Reservations[].Instances[].InstanceId" \
+                            --output text
+                    """).trim()
+
+                    if (instanceId) {
+                        echo "Found EC2 instance with ID: ${instanceId}"
+                        env.RESOURCE_ID = instanceId
+                    } else {
+                        error "No EC2 instance found with name: ${instanceName}"
+                    }
+                }
+            }
+        }
+
         stage('Import Resources') {
             steps {
                 script {
-                    // Example: Import an EC2 instance
-                    def resourceId = "i-0644ce13529a98e81" // Replace with the actual resource ID
+                    def resourceId = env.RESOURCE_ID // Use the resource ID from the previous stage
                     def resourceAddress = "aws_instance.public_instance" // Replace with the Terraform resource address
 
                     // Import the resource into Terraform state
@@ -52,7 +73,7 @@ pipeline {
                     if (importStatus == 0) {
                         echo "Resource imported successfully."
                     } else {
-                        echo "Failed to import resource. Check logs."
+                        error "Failed to import resource. Check logs."
                     }
                 }
             }
