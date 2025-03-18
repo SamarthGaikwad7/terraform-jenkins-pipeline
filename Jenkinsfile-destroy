@@ -45,7 +45,7 @@ pipeline {
                 script {
                     // Example: Import an EC2 instance
                     def resourceId = "i-0644ce13529a98e81" // Replace with the actual resource ID
-                    def resourceAddress = "aws_instance.my_instance" // Replace with the Terraform resource address
+                    def resourceAddress = "aws_instance.public_instance" // Replace with the Terraform resource address
 
                     // Import the resource into Terraform state
                     def importStatus = bat(returnStatus: true, script: "terraform import ${resourceAddress} ${resourceId}")
